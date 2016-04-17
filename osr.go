@@ -4,7 +4,9 @@ package gdal
 #include "go_gdal.h"
 #include "gdal_version.h"
 
-#cgo linux  pkg-config: gdal
+
+#cgo linux LDFLAGS: -L/usr/lib/x86_64-linux-gnu -lgdal
+#cgo linux CFLAGS: -I/usr/include/gdal
 #cgo darwin pkg-config: gdal
 #cgo windows LDFLAGS: -Lc:/gdal/release-1600-x64/lib -lgdal_i
 #cgo windows CFLAGS: -IC:/gdal/release-1600-x64/include
@@ -1186,11 +1188,6 @@ func CreateCoordinateTransform(
 // Destroy CoordinateTransform
 func (ct CoordinateTransform) Destroy() {
 	C.OCTDestroyCoordinateTransformation(ct.cval)
-}
-
-func (ct CoordinateTransform) Transform(numPoints int, xPoints []float64, yPoints []float64, zPoints []float64) bool {
-	val := C.OCTTransform(ct.cval, C.int(numPoints), (*C.double)(unsafe.Pointer(&xPoints[0])), (*C.double)(unsafe.Pointer(&yPoints[0])), (*C.double)(unsafe.Pointer(&zPoints[0])))
-	return int(val) != 0
 }
 
 // Fetch list of possible projection methods
