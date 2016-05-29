@@ -4,7 +4,8 @@ package gdal
 #include "go_gdal.h"
 #include "gdal_version.h"
 
-#cgo linux LDFLAGS: -L/usr/lib/x86_64-linux-gnu -lgdal
+//this requires libgdal 2.1, which currently is provided as .so.20
+#cgo linux LDFLAGS: -L/usr/lib/ -l:libgdal.so.20
 #cgo linux CFLAGS: -I/usr/include/gdal
 #cgo darwin pkg-config: gdal
 #cgo windows LDFLAGS: -Lc:/gdal/release-1600-x64/lib -lgdal_i
