@@ -14,8 +14,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"unsafe"
+	"reflect"
 )
 
 var _ = fmt.Println
@@ -115,6 +115,27 @@ func (dataType DataType) Union(dataTypeB DataType) DataType {
 		C.GDALDataTypeUnion(C.GDALDataType(dataType), C.GDALDataType(dataTypeB)),
 	)
 }
+
+//Safe array conversion
+func Int64SliceToCGUIntBig(data []int64) []C.GUIntBig {
+	sliceSz := len(data)
+	result := make([]C.GUIntBig, sliceSz)
+	for i := 0; i < sliceSz; i++ {
+		result[i] = C.GUIntBig(data[i])
+	}
+	return result
+}
+
+//Safe array conversion
+func CGUIntBigSliceToInt64(data []C.GUIntBig) []int64 {
+	sliceSz := len(data)
+	result := make([]int64, sliceSz)
+	for i := 0; i < sliceSz; i++ {
+		result[i] = int64(data[i])
+	}
+	return result
+}
+
 
 //Safe array conversion
 func IntSliceToCInt(data []int) []C.int {
@@ -1332,6 +1353,37 @@ func (rb RasterBand) Histogram(
 	}
 }
 
+// Compute raster histogram
+func (rb RasterBand) HistogramEx(
+	min, max float64,
+	buckets int,
+	includeOutOfRange, approxOK int,
+	progress ProgressFunc,
+	data interface{},
+) ([]int64, error) {
+	arg := &goGDALProgressFuncProxyArgs{
+		progress, data,
+	}
+
+	histogram := make([]C.GUIntBig, buckets)
+
+	if err := C.GDALGetRasterHistogram(
+		rb.cval,
+		C.double(min),
+		C.double(max),
+		C.int(buckets),
+		(*C.int)(unsafe.Pointer(&histogram[0])),
+		C.int(includeOutOfRange),
+		C.int(approxOK),
+		C.goGDALProgressFuncProxyB(),
+		unsafe.Pointer(arg),
+	).Err(); err != nil {
+		return nil, err
+	} else {
+		return CGUIntBigSliceToInt64(histogram), nil
+	}
+}
+
 // Fetch default raster histogram
 func (rb RasterBand) DefaultHistogram(
 	force int,
@@ -1362,6 +1414,38 @@ func (rb RasterBand) DefaultHistogram(
 
 	return min, max, buckets, histogram, err
 }
+
+// Fetch default raster histogram
+func (rb RasterBand) DefaultHistogramEx(
+	force int,
+	progress ProgressFunc,
+	data interface{},
+) (min, max float64, buckets int, histogram []int64, err error) {
+	arg := &goGDALProgressFuncProxyArgs{
+		progress, data,
+	}
+
+	var cHistogram *C.GUIntBig
+
+	err = C.GDALGetDefaultHistogramEx(
+		rb.cval,
+		(*C.double)(&min),
+		(*C.double)(&max),
+		(*C.int)(unsafe.Pointer(&buckets)),
+		&cHistogram,
+		C.int(force),
+		C.goGDALProgressFuncProxyB(),
+		unsafe.Pointer(arg),
+	).Err()
+
+	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&histogram))
+	sliceHeader.Cap = buckets
+	sliceHeader.Len = buckets
+	sliceHeader.Data = uintptr(unsafe.Pointer(cHistogram))
+
+	return min, max, buckets, histogram, err
+}
+
 
 // Set default raster histogram
 // Unimplemented: SetDefaultHistogram
