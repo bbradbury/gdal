@@ -269,8 +269,16 @@ type Dataset struct {
 	cval C.GDALDatasetH
 }
 
+type VRTDataset struct {
+	Dataset
+}
+
 type RasterBand struct {
 	cval C.GDALRasterBandH
+}
+
+type VRTRasterBand struct {
+	RasterBand
 }
 
 type Driver struct {
@@ -469,13 +477,29 @@ func Open(filename string, access Access) (Dataset, error) {
 }
 
 // Open a shared existing dataset
-func OpenShared(filename string, access Access) Dataset {
+func OpenShared(filename string, access Access) (Dataset, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
 	dataset := C.GDALOpenShared(cFilename, C.GDALAccess(access))
-	return Dataset{dataset}
+	if dataset == nil {
+		return Dataset{nil}, fmt.Errorf("Error: dataset '%s' open error", filename)
+	}
+	return Dataset{dataset}, nil
 }
+
+// Create a VRT dataset
+func NewVRTDataset(xSize, ySize int) (VRTDataset, error) {
+	dataset := C.VRTCreate(C.int(xSize), C.int(ySize))
+	if dataset == nil {
+		return VRTDataset{Dataset{}}, fmt.Errorf("Couldn't create new VRTDataset")
+	}
+	return VRTDataset{Dataset{C.GDALDatasetH(dataset)}}, nil
+}
+
+
+
+
 
 // Unimplemented: DumpOpenDatasets
 
@@ -668,6 +692,7 @@ func (object *Driver) MetadataItem(name, domain string) string {
 		),
 	)
 }
+
 
 /* ==================================================================== */
 /*      GDALDataset class ... normally this represents one file.        */
@@ -1518,6 +1543,36 @@ func (sourceRaster RasterBand) RasterBandCopyWholeRaster(
 		(**C.char)(unsafe.Pointer(&cOptions[0])),
 		C.goGDALProgressFuncProxyB(),
 		unsafe.Pointer(arg),
+	).Err()
+}
+
+type ResamplingType string
+
+const (
+	RT_Cubic ResamplingType = "cubic"
+	RT_Average = "average"
+	RT_Nearest = "nearest"
+	RT_CubicSpline = "cubicspline"
+	RT_Bilinear = "bilinear"
+	RT_Lanczos = "lanczos"
+)
+
+func (destRasterBand VRTRasterBand) AddSimpleSource (
+	sourceRasterBand RasterBand,
+	srcXOff, srcYOff,
+	dstXOff, dstYOff int,
+	resamplingType ResamplingType,
+) error {
+	nd, _ := sourceRasterBand.NoDataValue()
+	return C.VRTAddSimpleSource(
+		destRasterBand.cval,
+		sourceRasterBand.cval,
+		C.int(srcXOff), C.int(srcYOff),
+		C.int(sourceRasterBand.XSize()), C.int(sourceRasterBand.YSize()),
+		C.int(dstXOff), C.int(dstYOff),
+		C.int(destRasterBand.XSize()), C.int(destRasterBand.YSize()),
+		C.CString(string(resamplingType)),
+		C.double(nd),
 	).Err()
 }
 
