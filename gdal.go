@@ -641,6 +641,47 @@ func (object MajorObject) SetMetadataItem(name, value, domain string) {
 	return
 }
 
+func (object *RasterBand) SetMetadata(metadata []string, domain string) error {
+	length := len(metadata)
+	cMetadata := make([]*C.char, length+1)
+	for i := 0; i < length; i++ {
+		cMetadata[i] = C.CString(metadata[i])
+		defer C.free(unsafe.Pointer(cMetadata[i]))
+	}
+	cMetadata[length] = (*C.char)(unsafe.Pointer(nil))
+
+
+	c_domain := C.CString(domain)
+	defer C.free(unsafe.Pointer(c_domain))
+
+	return C.GDALSetMetadata(
+		C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+		(**C.char)(unsafe.Pointer(&cMetadata[0])),
+		c_domain,
+	).Err()
+}
+
+func (object *RasterBand) GetMetadata(domain string) []string {
+	cDomain := C.CString(domain)
+	defer C.free(unsafe.Pointer(cDomain))
+
+	p := C.GDALGetMetadata(
+		C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+		cDomain)
+	var strings []string
+	q := uintptr(unsafe.Pointer(p))
+	for {
+		p = (**C.char)(unsafe.Pointer(q))
+		if p == nil || *p == nil {
+			break
+		}
+		strings = append(strings, C.GoString(*p))
+		q += unsafe.Sizeof(q)
+	}
+
+	return strings
+}
+
 // TODO: Make korrekt class hirerarchy via interfaces
 
 func (object *RasterBand) SetMetadataItem(name, value, domain string) error {
@@ -657,6 +698,36 @@ func (object *RasterBand) SetMetadataItem(name, value, domain string) error {
 		C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
 		c_name, c_value, c_domain,
 	).Err()
+}
+
+func (object *RasterBand) GetMetadataItem(name, domain string) string {
+	c_name := C.CString(name)
+	defer C.free(unsafe.Pointer(c_name))
+
+	c_domain := C.CString(domain)
+	defer C.free(unsafe.Pointer(c_domain))
+
+	return C.GoString(
+			C.GDALGetMetadataItem(
+				C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+				c_name, c_domain,
+			),
+		)
+}
+
+func (object *Dataset) GetMetadataItem(name, domain string) string {
+	c_name := C.CString(name)
+	defer C.free(unsafe.Pointer(c_name))
+
+	c_domain := C.CString(domain)
+	defer C.free(unsafe.Pointer(c_domain))
+
+	return C.GoString(
+			C.GDALGetMetadataItem(
+				C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+				c_name, c_domain,
+			),
+		)
 }
 
 // TODO: Make korrekt class hirerarchy via interfaces
@@ -711,7 +782,7 @@ func (dataset Dataset) FileList() []string {
 	q := uintptr(unsafe.Pointer(p))
 	for {
 		p = (**C.char)(unsafe.Pointer(q))
-		if *p == nil {
+		if p == nil || *p == nil {
 			break
 		}
 		strings = append(strings, C.GoString(*p))
