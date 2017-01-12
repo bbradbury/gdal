@@ -15,8 +15,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"unsafe"
 	"reflect"
+	"unsafe"
 )
 
 var _ = fmt.Println
@@ -136,7 +136,6 @@ func CGUIntBigSliceToInt64(data []C.GUIntBig) []int64 {
 	}
 	return result
 }
-
 
 //Safe array conversion
 func IntSliceToCInt(data []int) []C.int {
@@ -497,10 +496,6 @@ func NewVRTDataset(xSize, ySize int) (VRTDataset, error) {
 	return VRTDataset{Dataset{C.GDALDatasetH(dataset)}}, nil
 }
 
-
-
-
-
 // Unimplemented: DumpOpenDatasets
 
 // Return the driver by short name
@@ -650,7 +645,6 @@ func (object *RasterBand) SetMetadata(metadata []string, domain string) error {
 	}
 	cMetadata[length] = (*C.char)(unsafe.Pointer(nil))
 
-
 	c_domain := C.CString(domain)
 	defer C.free(unsafe.Pointer(c_domain))
 
@@ -668,6 +662,23 @@ func (object *RasterBand) GetMetadata(domain string) []string {
 	p := C.GDALGetMetadata(
 		C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
 		cDomain)
+	var strings []string
+	q := uintptr(unsafe.Pointer(p))
+	for {
+		p = (**C.char)(unsafe.Pointer(q))
+		if p == nil || *p == nil {
+			break
+		}
+		strings = append(strings, C.GoString(*p))
+		q += unsafe.Sizeof(q)
+	}
+
+	return strings
+}
+
+func (object *RasterBand) GetMetadataDomainList() []string {
+	p := C.GDALGetMetadataDomainList(
+		C.GDALMajorObjectH(unsafe.Pointer(object.cval)))
 	var strings []string
 	q := uintptr(unsafe.Pointer(p))
 	for {
@@ -708,11 +719,11 @@ func (object *RasterBand) GetMetadataItem(name, domain string) string {
 	defer C.free(unsafe.Pointer(c_domain))
 
 	return C.GoString(
-			C.GDALGetMetadataItem(
-				C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
-				c_name, c_domain,
-			),
-		)
+		C.GDALGetMetadataItem(
+			C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+			c_name, c_domain,
+		),
+	)
 }
 
 func (object *Dataset) GetMetadataItem(name, domain string) string {
@@ -723,11 +734,11 @@ func (object *Dataset) GetMetadataItem(name, domain string) string {
 	defer C.free(unsafe.Pointer(c_domain))
 
 	return C.GoString(
-			C.GDALGetMetadataItem(
-				C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
-				c_name, c_domain,
-			),
-		)
+		C.GDALGetMetadataItem(
+			C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+			c_name, c_domain,
+		),
+	)
 }
 
 // TODO: Make korrekt class hirerarchy via interfaces
@@ -763,7 +774,6 @@ func (object *Driver) MetadataItem(name, domain string) string {
 		),
 	)
 }
-
 
 /* ==================================================================== */
 /*      GDALDataset class ... normally this represents one file.        */
@@ -1543,6 +1553,26 @@ func (rb RasterBand) DefaultHistogramEx(
 	return min, max, buckets, histogram, err
 }
 
+// Fetch default raster histogram
+func (rb RasterBand) SetDefaultHistogramEx(
+	min, max float64,
+	buckets int,
+	histogram []int64) error {
+
+	cHistogramSlc := Int64SliceToCGUIntBig(histogram)
+	var cHistogram *C.GUIntBig
+	cHistogram = &(cHistogramSlc[0])
+
+	err := C.GDALSetDefaultHistogramEx(
+		rb.cval,
+		(C.double)(min),
+		(C.double)(max),
+		(C.int)(buckets),
+		cHistogram,
+	).Err()
+
+	return err
+}
 
 // Set default raster histogram
 // Unimplemented: SetDefaultHistogram
@@ -1620,15 +1650,15 @@ func (sourceRaster RasterBand) RasterBandCopyWholeRaster(
 type ResamplingType string
 
 const (
-	RT_Cubic ResamplingType = "cubic"
-	RT_Average = "average"
-	RT_Nearest = "nearest"
-	RT_CubicSpline = "cubicspline"
-	RT_Bilinear = "bilinear"
-	RT_Lanczos = "lanczos"
+	RT_Cubic       ResamplingType = "cubic"
+	RT_Average                    = "average"
+	RT_Nearest                    = "nearest"
+	RT_CubicSpline                = "cubicspline"
+	RT_Bilinear                   = "bilinear"
+	RT_Lanczos                    = "lanczos"
 )
 
-func (destRasterBand VRTRasterBand) AddSimpleSource (
+func (destRasterBand VRTRasterBand) AddSimpleSource(
 	sourceRasterBand RasterBand,
 	srcXOff, srcYOff,
 	dstXOff, dstYOff int,
