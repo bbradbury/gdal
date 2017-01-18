@@ -857,6 +857,9 @@ const (
 	GRA_Cubic            = ResampleAlg(2)
 	GRA_CubicSpline      = ResampleAlg(3)
 	GRA_Lanczos          = ResampleAlg(4)
+	GRA_Average	     = ResampleAlg(5)
+	GRA_Mode	     = ResampleAlg(6)
+	GRA_Gauss            = ResampleAlg(7)
 )
 
 func (dataset Dataset) AutoCreateWarpedVRT(srcWKT, dstWKT string, resampleAlg ResampleAlg) (Dataset, error) {
@@ -930,6 +933,91 @@ func (dataset Dataset) IO(
 		C.int(bandCount),
 		(*C.int)(unsafe.Pointer(&IntSliceToCInt(bandMap)[0])),
 		C.int(pixelSpace), C.int(lineSpace), C.int(bandSpace),
+	).Err()
+}
+
+// Read / write a region of image data from multiple bands
+func (dataset Dataset) IOEx(
+	rwFlag RWFlag,
+	xOff, yOff, xSize, ySize int,
+	buffer interface{},
+	bufXSize, bufYSize int,
+	bandCount int,
+	bandMap []int,
+	pixelSpace, lineSpace, bandSpace int,
+	resampleAlg ResampleAlg,
+	progressFunc ProgressFunc,
+	progressData interface{},
+	useFloatingPointWindow bool,
+	dfXOff, dfYOff, dfXSize, dfYSize float64,
+) error {
+	var dataType DataType
+	var dataPtr unsafe.Pointer
+	switch data := buffer.(type) {
+	case []int8:
+		dataType = Byte
+		dataPtr = unsafe.Pointer(&data[0])
+	case []uint8:
+		dataType = Byte
+		dataPtr = unsafe.Pointer(&data[0])
+	case []int16:
+		dataType = Int16
+		dataPtr = unsafe.Pointer(&data[0])
+	case []uint16:
+		dataType = UInt16
+		dataPtr = unsafe.Pointer(&data[0])
+	case []int32:
+		dataType = Int32
+		dataPtr = unsafe.Pointer(&data[0])
+	case []uint32:
+		dataType = UInt32
+		dataPtr = unsafe.Pointer(&data[0])
+	case []float32:
+		dataType = Float32
+		dataPtr = unsafe.Pointer(&data[0])
+	case []float64:
+		dataType = Float64
+		dataPtr = unsafe.Pointer(&data[0])
+	default:
+		return fmt.Errorf("Error: buffer is not a valid data type (must be a valid numeric slice)")
+	}
+
+	var floatingPointValidityInt = 0;
+	if(useFloatingPointWindow) {
+		floatingPointValidityInt = 1;
+	}
+
+	if(progressFunc != nil) {
+		panic("ProgressFunc is unsupported in IOEx bindings -bb")
+	}
+	arg := &goGDALProgressFuncProxyArgs{
+		progressFunc, progressData,
+	}
+	_ = arg
+
+	exParams := C.GDALRasterIOExtraArg{
+		nVersion: C.RASTERIO_EXTRA_ARG_CURRENT_VERSION,
+		eResampleAlg: C.GDALRIOResampleAlg(resampleAlg),
+//		pfnProgress: C.goGDALProgressFuncProxyB(),
+//		pProgressData: unsafe.Pointer(arg),
+		bFloatingPointWindowValidity: C.int(floatingPointValidityInt),
+		dfXOff: C.double(dfXOff),
+		dfYOff: C.double(dfYOff),
+		dfXSize: C.double(dfXSize),
+		dfYSize: C.double(dfYSize),
+	}
+
+	return C.GDALDatasetRasterIOEx(
+		dataset.cval,
+		C.GDALRWFlag(rwFlag),
+		C.int(xOff), C.int(yOff), C.int(xSize), C.int(ySize),
+		dataPtr,
+		C.int(bufXSize), C.int(bufYSize),
+		C.GDALDataType(dataType),
+		C.int(bandCount),
+		(*C.int)(unsafe.Pointer(&IntSliceToCInt(bandMap)[0])),
+		C.GSpacing(pixelSpace), C.GSpacing(lineSpace), C.GSpacing(bandSpace),
+		unsafe.Pointer(&exParams),
 	).Err()
 }
 
