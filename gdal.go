@@ -1753,6 +1753,8 @@ func (destRasterBand VRTRasterBand) AddSimpleSource(
 	resamplingType ResamplingType,
 ) error {
 	nd, _ := sourceRasterBand.NoDataValue()
+	cResamplingType := C.CString(string(resamplingType))
+	defer C.free(cResamplingType)
 	return C.VRTAddSimpleSource(
 		destRasterBand.cval,
 		sourceRasterBand.cval,
@@ -1760,7 +1762,7 @@ func (destRasterBand VRTRasterBand) AddSimpleSource(
 		C.int(sourceRasterBand.XSize()), C.int(sourceRasterBand.YSize()),
 		C.int(dstXOff), C.int(dstYOff),
 		C.int(destRasterBand.XSize()), C.int(destRasterBand.YSize()),
-		C.CString(string(resamplingType)),
+		cResamplingType,
 		C.double(nd),
 	).Err()
 }
