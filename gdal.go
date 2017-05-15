@@ -1017,7 +1017,7 @@ func (dataset Dataset) IOEx(
 		C.int(bandCount),
 		(*C.int)(unsafe.Pointer(&IntSliceToCInt(bandMap)[0])),
 		C.GSpacing(pixelSpace), C.GSpacing(lineSpace), C.GSpacing(bandSpace),
-		unsafe.Pointer(&exParams),
+		&exParams,
 	).Err()
 }
 
@@ -1754,9 +1754,9 @@ func (destRasterBand VRTRasterBand) AddSimpleSource(
 ) error {
 	nd, _ := sourceRasterBand.NoDataValue()
 	cResamplingType := C.CString(string(resamplingType))
-	defer C.free(cResamplingType)
+	defer C.free(unsafe.Pointer(cResamplingType))
 	return C.VRTAddSimpleSource(
-		destRasterBand.cval,
+		C.VRTSourcedRasterBandH(destRasterBand.cval),
 		sourceRasterBand.cval,
 		C.int(srcXOff), C.int(srcYOff),
 		C.int(sourceRasterBand.XSize()), C.int(sourceRasterBand.YSize()),
